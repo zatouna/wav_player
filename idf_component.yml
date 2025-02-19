@@ -1,0 +1,9 @@
+version: "1.0.1"
+description: WAV audio file player component for ESP32
+url: https://github.com/zatouna/wav_player
+dependencies:
+  idf:
+    version: ">=5.0.0"
+  # Add any other component dependencies here if needed
+targets:
+  - esp32s3 
