@@ -137,6 +137,12 @@ esp_err_t wav_player_play_file(const char* filepath, wav_player_write_cb_t write
         fclose(fp);
         return ESP_FAIL;
     }
+    ESP_LOGI(TAG, "WAV file info: channels=%d, sample_rate=%lu, bits_per_sample=%d, block_align=%d, data_size=%lu",
+             wav_header.num_channels,
+             wav_header.sample_rate,
+             wav_header.bits_per_sample,
+             wav_header.block_align,
+             wav_header.data_size);
 
     uint8_t *buffer = malloc(BUFFER_SIZE);
     uint8_t *processed_buffer = malloc(BUFFER_SIZE);
@@ -150,28 +156,53 @@ esp_err_t wav_player_play_file(const char* filepath, wav_player_write_cb_t write
 
     size_t bytes_read;
     esp_err_t ret = ESP_OK;
+    bool first_buffer = true;
     
     while ((bytes_read = fread(buffer, 1, BUFFER_SIZE, fp)) > 0) {
-        // Process audio data with volume adjustment
+        size_t processed_bytes = 0;
+
         if (wav_header.bits_per_sample == 16) {
             int16_t *samples = (int16_t*)buffer;
             int16_t *processed = (int16_t*)processed_buffer;
-            size_t sample_count = bytes_read / 2;
+            size_t samples_per_channel = bytes_read / wav_header.block_align;
             
-            for (size_t i = 0; i < sample_count; i++) {
-                processed[i] = apply_volume(samples[i], current_volume);
+            if (wav_header.num_channels == 1) {
+                // For mono: duplicate each sample to both channels
+                for (size_t i = 0; i < samples_per_channel; i++) {
+                    int16_t sample = apply_volume(samples[i], current_volume);
+                    processed[i * 2] = sample;
+                    processed[i * 2 + 1] = sample;
+                }
+                processed_bytes = samples_per_channel * 4; // 2 channels * 2 bytes per sample
+            } else {
+                // For stereo: process directly
+                for (size_t i = 0; i < samples_per_channel * 2; i++) {
+                    processed[i] = apply_volume(samples[i], current_volume);
+                }
+                processed_bytes = bytes_read;
+            }
+            
+            // Log only for the first buffer
+            if (first_buffer) {
+                ESP_LOGI(TAG, "First buffer - channels: %d, bytes: %d, processed: %d",
+                         wav_header.num_channels, bytes_read, processed_bytes);
+                first_buffer = false;
             }
         } else if (wav_header.bits_per_sample == 24) {
-            // Process 24-bit audio in chunks of 3 bytes
-            for (size_t i = 0; i < bytes_read; i += 3) {
-                int16_t sample = convert_24_to_16(&buffer[i]);
-                int16_t processed = apply_volume(sample, current_volume);
-                // Convert back to 24-bit if needed
-                // ... conversion code here ...
+            int16_t *processed = (int16_t*)processed_buffer;
+            size_t sample_count = bytes_read / 3;  // Count of 24-bit samples
+            size_t out_idx = 0;
+            
+            // Process each 24-bit sample
+            for (size_t i = 0; i < sample_count; i++) {
+                size_t in_idx = i * 3;  // Each sample is 3 bytes
+                int16_t sample = convert_24_to_16(&buffer[in_idx]);
+                processed[out_idx++] = apply_volume(sample, current_volume);
             }
+            processed_bytes = out_idx * sizeof(int16_t);
         }
 
-        ret = write_cb(processed_buffer, bytes_read, user_data);
+        ret = write_cb(processed_buffer, processed_bytes, user_data);
         if (ret != ESP_OK) {
             ESP_LOGE(TAG, "Write callback failed");
             break;
