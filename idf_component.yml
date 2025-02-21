@@ -1,4 +1,4 @@
-version: "1.0.1"
+version: "1.0.2"
 description: WAV audio file player component for ESP32
 url: https://github.com/zatouna/wav_player
 dependencies:

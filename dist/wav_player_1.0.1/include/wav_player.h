@@ -18,7 +18,7 @@ typedef struct {
 // Volume control
 #define MIN_VOLUME 0
 #define MAX_VOLUME 100
-#define BUFFER_SIZE 1024
+#define BUFFER_SIZE 4096
 
 /**
  * @brief Callback function type for writing audio data

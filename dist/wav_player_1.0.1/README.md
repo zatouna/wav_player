@@ -16,7 +16,7 @@ A lightweight WAV audio file player component for ESP32 that supports 16-bit and
 
 To add this component to your project, run:
 ```bash
-idf.py add-dependency "zatouna/wav_player^1.0.0"
+idf.py add-dependency "zatouna/wav_player^1.0.1"
 ```
 
 ## API Reference
