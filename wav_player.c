@@ -156,9 +156,12 @@ esp_err_t wav_player_play_file(const char* filepath, wav_player_write_cb_t write
 
     size_t bytes_read;
     esp_err_t ret = ESP_OK;
-    bool first_buffer = true;
     
-    while ((bytes_read = fread(buffer, 1, BUFFER_SIZE, fp)) > 0) {
+    // For mono files, read half the buffer size to account for stereo conversion
+    size_t read_size = (wav_header.num_channels == 1) ? 
+                       (BUFFER_SIZE / 2) : BUFFER_SIZE;
+    
+    while ((bytes_read = fread(buffer, 1, read_size, fp)) > 0) {
         size_t processed_bytes = 0;
 
         if (wav_header.bits_per_sample == 16) {
@@ -170,8 +173,9 @@ esp_err_t wav_player_play_file(const char* filepath, wav_player_write_cb_t write
                 // For mono: duplicate each sample to both channels
                 for (size_t i = 0; i < samples_per_channel; i++) {
                     int16_t sample = apply_volume(samples[i], current_volume);
-                    processed[i * 2] = sample;
-                    processed[i * 2 + 1] = sample;
+                    size_t out_idx = i * 2;
+                    processed[out_idx] = sample;     // Left channel
+                    processed[out_idx + 1] = sample; // Right channel
                 }
                 processed_bytes = samples_per_channel * 4; // 2 channels * 2 bytes per sample
             } else {
@@ -180,13 +184,6 @@ esp_err_t wav_player_play_file(const char* filepath, wav_player_write_cb_t write
                     processed[i] = apply_volume(samples[i], current_volume);
                 }
                 processed_bytes = bytes_read;
-            }
-            
-            // Log only for the first buffer
-            if (first_buffer) {
-                ESP_LOGI(TAG, "First buffer - channels: %d, bytes: %d, processed: %d",
-                         wav_header.num_channels, bytes_read, processed_bytes);
-                first_buffer = false;
             }
         } else if (wav_header.bits_per_sample == 24) {
             int16_t *processed = (int16_t*)processed_buffer;
